@@ -98,3 +98,177 @@
       display: none;
     }
     #counter {
+      margin: 20px 0 10px;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-height: 350px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: none;
+    }
+    li {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+    }
+    li:last-child { border-bottom: none; }
+    li a {
+      color: #0095f6;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    li a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Instagram Follow Checker</h1>
+    <div class="center">
+      <span class="badge">100% Locale • Dati elaborati nel browser</span>
+    </div>
+
+    <div class="file-box">
+      <label>1. Carica <code>followers_1.json</code>:</label>
+      <input type="file" id="followersFile" accept=".json">
+    </div>
+
+    <div class="file-box">
+      <label>2. Carica <code>following.json</code>:</label>
+      <input type="file" id="followingFile" accept=".json">
+    </div>
+
+    <button onclick="calcola()">Confronta Liste</button>
+    <button id="btnCopiaScript" class="btn-secondary" onclick="copiaCodiceScript()">Copia Script con la Lista Inclusa</button>
+
+    <input type="text" id="filtro" class="search-box" placeholder="Cerca username..." oninput="filtraLista()">
+    <div id="counter"></div>
+    <ul id="risultati"></ul>
+  </div>
+
+  <script>
+    let nonRicambianoGlobale = [];
+
+    function extractUsers(obj) {
+      let users = new Set();
+      function deepScan(item) {
+        if (!item) return;
+        if (typeof item === 'object') {
+          if (item.href && typeof item.href === 'string') {
+            let m = item.href.match(/instagram\.com(?:\/_u)?\/([^/?#]+)/);
+            if (m && m[1]) users.add(m[1].toLowerCase());
+          }
+          if (item.value && typeof item.value === 'string' && !item.value.startsWith('http')) {
+            users.add(item.value.toLowerCase());
+          }
+          if (item.title && typeof item.title === 'string' && !item.title.includes(' ') && item.title.length < 35) {
+            users.add(item.title.toLowerCase());
+          }
+          for (let k in item) deepScan(item[k]);
+        }
+      }
+      deepScan(obj);
+      return users;
+    }
+
+    async function calcola() {
+      const f1 = document.getElementById('followersFile').files[0];
+      const f2 = document.getElementById('followingFile').files[0];
+
+      if (!f1 || !f2) {
+        alert("Carica entrambi i file prima di procedere!");
+        return;
+      }
+
+      const followers = extractUsers(JSON.parse(await f1.text()));
+      const following = extractUsers(JSON.parse(await f2.text()));
+
+      nonRicambianoGlobale = [...following].filter(u => !followers.has(u)).sort();
+
+      document.getElementById('counter').innerText = `${nonRicambianoGlobale.length} account non ricambiano`;
+      document.getElementById('filtro').style.display = 'block';
+      document.getElementById('risultati').style.display = 'block';
+      document.getElementById('btnCopiaScript').style.display = 'block';
+      renderLista(nonRicambianoGlobale);
+    }
+
+    function renderLista(users) {
+      const ul = document.getElementById('risultati');
+      ul.innerHTML = '';
+      users.forEach(user => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span><b>@</b>${user}</span> <a href="https://instagram.com/${user}" target="_blank">Profilo ↗</a>`;
+        ul.appendChild(li);
+      });
+    }
+
+    function filtraLista() {
+      const q = document.getElementById('filtro').value.toLowerCase();
+      renderLista(nonRicambianoGlobale.filter(u => u.includes(q)));
+    }
+
+    function copiaCodiceScript() {
+      if (nonRicambianoGlobale.length === 0) return;
+      const listaJSON = JSON.stringify(nonRicambianoGlobale);
+
+      const codice = `// Script di unfollow automatico con la tua lista personalizzata
+const targetSet = new Set(${listaJSON});
+const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+async function avviaUnfollow() {
+  console.log("Avvio scansione della finestra Seguiti...");
+  const dialog = document.querySelector('div[role="dialog"]');
+  if (!dialog) {
+    alert("ERRORE: Devi prima aprire la finestra 'Seguiti' sul tuo profilo!");
+    return;
+  }
+
+  let count = 0;
+  let links = Array.from(dialog.querySelectorAll('a[role="link"]'));
+
+  for (let a of links) {
+    let username = a.innerText.trim().toLowerCase();
+    if (targetSet.has(username)) {
+      let riga = a.closest('div[role="listitem"]') || a.closest('li') || a.parentElement.parentElement.parentElement;
+      let btn = riga ? Array.from(riga.querySelectorAll('button')).find(b => b.innerText.trim() === 'Segui già' || b.innerText.trim() === 'Following') : null;
+
+      if (btn) {
+        console.log(\`[\${++count}] Trovato nella tua lista: @\${username}. Rimuovo...\`);
+        btn.click();
+        await delay(1200);
+
+        let modalBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Non seguire più' || b.innerText.trim() === 'Unfollow');
+        if (modalBtn) {
+          modalBtn.click();
+          console.log(\`Unfollow completato per @\${username}\`);
+        }
+
+        let pausa = Math.floor(Math.random() * (20000 - 12000 + 1)) + 12000;
+        console.log(\`Attesa di sicurezza: \${(pausa/1000).toFixed(1)}s...\`);
+        await delay(pausa);
+      }
+    }
+  }
+  console.log(\`Sessione terminata. Profili rimossi: \${count}\`);
+}
+
+avviaUnfollow();`;
+
+      navigator.clipboard.writeText(codice).then(() => {
+        alert("Script copiato negli appunti con TUTTI i tuoi " + nonRicambianoGlobale.length + " profili inclusi dentro!");
+      });
+    }
+  </script>
+</body>
+</html>
