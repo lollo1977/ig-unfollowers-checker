@@ -27,3 +27,4 @@ Un semplice strumento web per scoprire quali account segui su Instagram che non 
 2. Carica il file `followers_1.json`.
 3. Carica il file `following.json`.
 4. Clicca su **Confronta Liste** per visualizzare i risultati con il link diretto ai profili.
+5. Per accedere al programma https://lollo1977.github.io/ig-unfollowers-checker/
