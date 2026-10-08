@@ -150,7 +150,7 @@
     </div>
 
     <button onclick="calcola()">Confronta Liste</button>
-    <button id="btnCopiaScript" class="btn-secondary" onclick="copiaCodiceScript()">Copia Script con la Lista Inclusa</button>
+    <button id="btnCopiaScript" class="btn-secondary" onclick="copiaCodiceScript()">Copia Script con Auto-Scroll</button>
 
     <input type="text" id="filtro" class="search-box" placeholder="Cerca username..." oninput="filtraLista()">
     <div id="counter"></div>
@@ -222,51 +222,90 @@
       if (nonRicambianoGlobale.length === 0) return;
       const listaJSON = JSON.stringify(nonRicambianoGlobale);
 
-      const codice = `// Script di unfollow automatico con la tua lista personalizzata
+      const codice = `// Script di unfollow automatico con Auto-Scroll
 const targetSet = new Set(${listaJSON});
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
 async function avviaUnfollow() {
-  console.log("Avvio scansione della finestra Seguiti...");
+  console.log("Ricerca del modale Seguiti...");
   const dialog = document.querySelector('div[role="dialog"]');
   if (!dialog) {
-    alert("ERRORE: Devi prima aprire la finestra 'Seguiti' sul tuo profilo!");
+    alert("ERRORE: Apri la finestrella dei 'Seguiti' sul profilo prima di avviare!");
     return;
   }
 
-  let count = 0;
-  let links = Array.from(dialog.querySelectorAll('a[role="link"]'));
+  const scrollBox = dialog.querySelector('div[style*="overflow-y"]') || 
+                    dialog.querySelector('div.xyi19xy') || 
+                    dialog.querySelector('div[role="dialog"] > div > div > div:nth-child(2)') || 
+                    dialog;
 
-  for (let a of links) {
-    let username = a.innerText.trim().toLowerCase();
-    if (targetSet.has(username)) {
-      let riga = a.closest('div[role="listitem"]') || a.closest('li') || a.parentElement.parentElement.parentElement;
-      let btn = riga ? Array.from(riga.querySelectorAll('button')).find(b => b.innerText.trim() === 'Segui già' || b.innerText.trim() === 'Following') : null;
+  let rimossi = 0;
+  let giaVisti = new Set();
+  let tentativiSenzaNuovi = 0;
 
-      if (btn) {
-        console.log(\`[\${++count}] Trovato nella tua lista: @\${username}. Rimuovo...\`);
-        btn.click();
-        await delay(1200);
+  console.log("Avvio scansione progressiva...");
 
-        let modalBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Non seguire più' || b.innerText.trim() === 'Unfollow');
-        if (modalBtn) {
-          modalBtn.click();
-          console.log(\`Unfollow completato per @\${username}\`);
+  while (tentativiSenzaNuovi < 5) {
+    let links = Array.from(dialog.querySelectorAll('a[href]'));
+    let trovatiAdesso = 0;
+
+    for (let a of links) {
+      let href = a.getAttribute('href');
+      if (!href) continue;
+      let match = href.match(/^\\/([a-zA-Z0-9._]+)\\/?$/);
+      if (!match) continue;
+
+      let username = match[1].toLowerCase();
+      if (giaVisti.has(username)) continue;
+      giaVisti.add(username);
+
+      if (targetSet.has(username)) {
+        trovatiAdesso++;
+        let riga = a.closest('div[style*="height"]') || a.closest('li') || a.parentElement.parentElement.parentElement;
+        let btn = riga ? Array.from(riga.querySelectorAll('button')).find(b => 
+          b.innerText.trim() === 'Segui già' || b.innerText.trim() === 'Following'
+        ) : null;
+
+        if (btn) {
+          console.log(\`[\${++rimossi}] Trovato in lista: @\${username}. Rimozione in corso...\`);
+          btn.click();
+          await delay(1200);
+
+          let modalBtn = Array.from(document.querySelectorAll('button')).find(b => 
+            b.innerText.trim() === 'Non seguire più' || b.innerText.trim() === 'Unfollow'
+          );
+          if (modalBtn) {
+            modalBtn.click();
+            console.log(\`Unfollow completato per @\${username}\`);
+          }
+
+          let pausa = Math.floor(Math.random() * (18000 - 12000 + 1)) + 12000;
+          console.log(\`Attesa cautelativa: \${(pausa/1000).toFixed(1)}s...\`);
+          await delay(pausa);
         }
-
-        let pausa = Math.floor(Math.random() * (20000 - 12000 + 1)) + 12000;
-        console.log(\`Attesa di sicurezza: \${(pausa/1000).toFixed(1)}s...\`);
-        await delay(pausa);
       }
     }
+
+    let primaScroll = scrollBox.scrollTop;
+    scrollBox.scrollTop += 600;
+    await delay(2000);
+
+    if (scrollBox.scrollTop === primaScroll && trovatiAdesso === 0) {
+      tentativiSenzaNuovi++;
+      console.log(\`Caricamento nuovi profili... (\${tentativiSenzaNuovi}/5)\`);
+      await delay(1500);
+    } else {
+      tentativiSenzaNuovi = 0;
+    }
   }
-  console.log(\`Sessione terminata. Profili rimossi: \${count}\`);
+
+  console.log(\`Sessione completata. Profili rimossi: \${rimossi}\`);
 }
 
 avviaUnfollow();`;
 
       navigator.clipboard.writeText(codice).then(() => {
-        alert("Script copiato negli appunti con TUTTI i tuoi " + nonRicambianoGlobale.length + " profili inclusi dentro!");
+        alert("Script con Auto-Scroll copiato negli appunti!");
       });
     }
   </script>
